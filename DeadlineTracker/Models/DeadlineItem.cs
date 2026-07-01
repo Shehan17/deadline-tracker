@@ -1,68 +1,129 @@
-﻿using System.ComponentModel;
+using DeadlineTracker.Utilities;
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
 
-namespace DeadlineTracker.Models
+namespace DeadlineTracker.Models;
+
+public class DeadlineItem : INotifyPropertyChanged
 {
-    public class DeadlineItem : INotifyPropertyChanged
+    private Guid _id = Guid.NewGuid();
+    private string _title = string.Empty;
+    private string _category = string.Empty;
+    private string _description = string.Empty;
+    private DateTimeOffset _deadlineAt;
+    private bool _isCompleted;
+    private DateTimeOffset _createdAt = DateTimeOffset.Now;
+    private DateTimeOffset? _completedAt;
+
+    public Guid Id
     {
-        public Guid Id { get; set; } = Guid.NewGuid();
+        get => _id;
+        set => SetField(ref _id, value);
+    }
 
-        public string Title { get; set; } = string.Empty;
+    public string Title
+    {
+        get => _title;
+        set => SetField(ref _title, value);
+    }
 
-        public string Category { get; set; } = string.Empty;
+    public string Category
+    {
+        get => _category;
+        set => SetField(ref _category, value);
+    }
 
-        public string Description { get; set; } = string.Empty;
+    public string Description
+    {
+        get => _description;
+        set => SetField(ref _description, value);
+    }
 
-        public DateTime Deadline { get; set; }
-
-        public bool IsCompleted { get; set; }
-
-        public DateTime CreatedAt { get; set; } = DateTime.Now;
-
-        [JsonIgnore]
-        public string RemainingText
+    public DateTimeOffset DeadlineAt
+    {
+        get => _deadlineAt;
+        set
         {
-            get
-            {
-                if (IsCompleted)
-                    return "Completed";
+            if (!SetField(ref _deadlineAt, value))
+                return;
 
-                TimeSpan remaining = Deadline - DateTime.Now;
-
-                if (remaining.TotalSeconds <= 0)
-                    return "Expired";
-
-                return $"{remaining.Days}d {remaining.Hours}h {remaining.Minutes}m {remaining.Seconds}s left";
-            }
+            RefreshTimeDependentProperties();
         }
+    }
 
-        [JsonIgnore]
-        public string StatusText
+    public bool IsCompleted
+    {
+        get => _isCompleted;
+        set
         {
-            get
-            {
-                if (IsCompleted)
-                    return "Completed";
+            if (!SetField(ref _isCompleted, value))
+                return;
 
-                if (Deadline <= DateTime.Now)
-                    return "Expired";
-
-                return "Active";
-            }
+            RefreshTimeDependentProperties();
         }
+    }
 
-        public void Refresh()
+    public DateTimeOffset CreatedAt
+    {
+        get => _createdAt;
+        set => SetField(ref _createdAt, value);
+    }
+
+    public DateTimeOffset? CompletedAt
+    {
+        get => _completedAt;
+        set => SetField(ref _completedAt, value);
+    }
+
+    [JsonIgnore]
+    public string RemainingTimeText
+    {
+        get
         {
-            OnPropertyChanged(nameof(RemainingText));
-            OnPropertyChanged(nameof(StatusText));
+            if (IsCompleted)
+                return "Completed";
+
+            return DeadlineTimeFormatter.FormatRemainingTime(DeadlineAt, DateTimeOffset.Now);
         }
+    }
 
-        public event PropertyChangedEventHandler? PropertyChanged;
-
-        private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    [JsonIgnore]
+    public string StatusText
+    {
+        get
         {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+            if (IsCompleted)
+                return "Completed";
+
+            return IsOverdue ? "Overdue" : "Active";
         }
+    }
+
+    [JsonIgnore]
+    public bool IsOverdue => !IsCompleted && DeadlineAt <= DateTimeOffset.Now;
+
+    public void RefreshTimeDependentProperties()
+    {
+        OnPropertyChanged(nameof(RemainingTimeText));
+        OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(IsOverdue));
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value))
+            return false;
+
+        field = value;
+        OnPropertyChanged(propertyName);
+        return true;
+    }
+
+    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
